@@ -14,6 +14,9 @@ const nextConfig = {
   },
   compress: true,
   poweredByHeader: false,
+  // Render.com optimizations
+  output: 'standalone',
+  trailingSlash: false,
 }
 
 export default nextConfig

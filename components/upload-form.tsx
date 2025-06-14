@@ -5,7 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileUp, Github, Mail, AlertCircle, CheckCircle, Clock } from "lucide-react"
+import { Upload, FileUp, Github, Mail, AlertCircle, CheckCircle, Gift } from "lucide-react"
 import QRCodeDisplay from "./qr-code-display"
 
 export default function UploadForm() {
@@ -33,9 +33,9 @@ export default function UploadForm() {
     }
 
     const fileSizeMB = selectedFile.size / 1024 / 1024
-    if (fileSizeMB > 30) {
+    if (fileSizeMB > 100) {
       setFile(null)
-      setError(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum is 30MB.`)
+      setError(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum is 100MB.`)
       return
     }
 
@@ -51,7 +51,6 @@ export default function UploadForm() {
     setResult(null)
     setTimeElapsed(0)
 
-    // Start timer
     const startTime = Date.now()
     const timer = setInterval(() => {
       setTimeElapsed(Math.floor((Date.now() - startTime) / 1000))
@@ -60,13 +59,12 @@ export default function UploadForm() {
     try {
       const fileSizeMB = file.size / 1024 / 1024
 
-      // Set progress messages based on file size
-      if (fileSizeMB > 20) {
-        setUploadProgress("Uploading large file... This may take 45-60 seconds")
+      if (fileSizeMB > 50) {
+        setUploadProgress("Uploading very large file... This may take 3-4 minutes")
+      } else if (fileSizeMB > 25) {
+        setUploadProgress("Uploading large file... This may take 2-3 minutes")
       } else if (fileSizeMB > 10) {
-        setUploadProgress("Uploading file... This may take 30-45 seconds")
-      } else if (fileSizeMB > 5) {
-        setUploadProgress("Uploading file... This may take 15-30 seconds")
+        setUploadProgress("Uploading file... This may take 1-2 minutes")
       } else {
         setUploadProgress("Uploading file...")
       }
@@ -85,20 +83,14 @@ export default function UploadForm() {
 
       if (!response.ok) {
         let errorMessage = "Upload failed"
-
         try {
           const errorData = await response.json()
           errorMessage = errorData.error || errorMessage
         } catch {
           if (response.status === 413) {
-            errorMessage = "File too large. Please try a smaller file (max 30MB)."
-          } else if (response.status === 500) {
-            errorMessage = "Server error. Please try again."
-          } else if (response.status === 504) {
-            errorMessage = "Upload timeout. File may be too large or connection too slow."
+            errorMessage = "File too large. Please try a smaller file (max 100MB)."
           }
         }
-
         throw new Error(errorMessage)
       }
 
@@ -115,40 +107,6 @@ export default function UploadForm() {
       clearInterval(timer)
     } finally {
       setIsUploading(false)
-    }
-  }
-
-  const getFileSizeInfo = (file: File) => {
-    const sizeMB = file.size / 1024 / 1024
-
-    if (sizeMB > 20) {
-      return {
-        color: "text-red-600",
-        icon: <Clock className="h-3 w-3" />,
-        message: "Large file - may take 45-60 seconds",
-        bgColor: "bg-red-50 border-red-200",
-      }
-    } else if (sizeMB > 10) {
-      return {
-        color: "text-orange-600",
-        icon: <Clock className="h-3 w-3" />,
-        message: "Medium file - may take 30-45 seconds",
-        bgColor: "bg-orange-50 border-orange-200",
-      }
-    } else if (sizeMB > 5) {
-      return {
-        color: "text-yellow-600",
-        icon: <Clock className="h-3 w-3" />,
-        message: "Small file - may take 15-30 seconds",
-        bgColor: "bg-yellow-50 border-yellow-200",
-      }
-    } else {
-      return {
-        color: "text-green-600",
-        icon: <CheckCircle className="h-3 w-3" />,
-        message: "Very small file - fast upload",
-        bgColor: "bg-green-50 border-green-200",
-      }
     }
   }
 
@@ -170,35 +128,21 @@ export default function UploadForm() {
                 <span className="text-sm font-medium text-gray-700 text-center">
                   {file ? file.name : "Click to upload PDF"}
                 </span>
-                <span
-                  className={`text-xs mt-1 flex items-center gap-1 ${file ? getFileSizeInfo(file).color : "text-gray-500"}`}
-                >
-                  {file && getFileSizeInfo(file).icon}
-                  {file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "PDF files only (Max: 30MB)"}
+                <span className="text-xs mt-1 text-gray-500">
+                  {file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "PDF files only (Max: 100MB)"}
                 </span>
               </label>
             </div>
 
-            {/* File Size Warning */}
-            {file && file.size > 5 * 1024 * 1024 && (
-              <div className={`flex items-start gap-2 p-3 rounded-lg border ${getFileSizeInfo(file).bgColor}`}>
-                {getFileSizeInfo(file).icon}
-                <div
-                  className={`text-sm ${getFileSizeInfo(file).color.replace("text-", "text-").replace("-600", "-700")}`}
-                >
-                  <p className="font-medium">Large File Upload</p>
-                  <p>{getFileSizeInfo(file).message}</p>
-                  <p className="text-xs mt-1">💡 Keep browser open during upload - do not close or refresh</p>
+            {/* FREE Render Info */}
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Gift className="h-4 w-4 text-green-600" />
+                <div className="text-sm text-green-700">
+                  <p className="font-medium">100% FREE - Powered by Render</p>
+                  <p>Maximum file size: 100MB | No cost, no limits!</p>
+                  <p className="text-xs mt-1">🎉 Your 15.8MB file will upload successfully for FREE!</p>
                 </div>
-              </div>
-            )}
-
-            {/* Vercel Limits Info */}
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm text-blue-700">
-                <p className="font-medium">Vercel Processing Limits</p>
-                <p>Maximum file size: 30MB | Maximum processing time: 60 seconds</p>
-                <p className="text-xs mt-1">💡 For larger files, consider compressing your PDF first</p>
               </div>
             </div>
 
@@ -208,27 +152,23 @@ export default function UploadForm() {
                 <div className="text-sm text-red-700">
                   <p className="font-medium">Upload Error</p>
                   <p>{error}</p>
-                  {error.includes("too large") && (
-                    <p className="text-xs mt-1">💡 Try compressing your PDF or use a smaller file</p>
-                  )}
                 </div>
               </div>
             )}
 
-            {/* Progress Display */}
             {isUploading && (
               <div className="text-center">
                 <p className="text-sm text-blue-600 mb-2 font-medium">{uploadProgress}</p>
                 <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
                   <div
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full animate-pulse"
+                    className="bg-gradient-to-r from-green-500 to-blue-600 h-3 rounded-full animate-pulse"
                     style={{ width: "75%" }}
                   ></div>
                 </div>
                 <p className="text-xs text-gray-500">
                   Time elapsed: {Math.floor(timeElapsed / 60)}:{(timeElapsed % 60).toString().padStart(2, "0")}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Please keep this page open</p>
+                <p className="text-xs text-gray-500 mt-1">FREE processing - please keep this page open</p>
               </div>
             )}
 
@@ -240,12 +180,12 @@ export default function UploadForm() {
               {isUploading ? (
                 <div className="flex items-center">
                   <Upload className="mr-2 h-5 w-5 animate-spin" />
-                  Uploading...
+                  Uploading for FREE...
                 </div>
               ) : (
                 <>
                   <FileUp className="mr-2 h-5 w-5" />
-                  Upload PDF & Generate QR Code
+                  Upload PDF & Generate QR Code (FREE)
                 </>
               )}
             </Button>
@@ -259,7 +199,7 @@ export default function UploadForm() {
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-600" />
               <p className="text-sm text-green-700 font-medium">
-                Upload successful! QR code generated with filename in bold center.
+                FREE upload successful! QR code generated with filename in bold center.
               </p>
             </div>
           </div>
@@ -268,7 +208,7 @@ export default function UploadForm() {
 
           {result.fileSize && result.uploadTime && (
             <div className="text-center text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-              📊 Uploaded {result.fileSize} in {result.uploadTime}
+              🎉 Uploaded {result.fileSize} in {result.uploadTime} - 100% FREE via Render
             </div>
           )}
         </div>
