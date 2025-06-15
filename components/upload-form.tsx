@@ -5,21 +5,25 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileUp, Github, Mail, AlertCircle, CheckCircle, Gift } from "lucide-react"
+import { Upload, FileUp, Github, Mail, AlertCircle } from "lucide-react"
 import QRCodeDisplay from "./qr-code-display"
 
 export default function UploadForm() {
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<{
+    url: string
+    fileName: string
+    fileSize?: string
+    uploadTime?: string
+  } | null>(null)
   const [error, setError] = useState("")
   const [uploadProgress, setUploadProgress] = useState("")
-  const [timeElapsed, setTimeElapsed] = useState(0)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
+
     setError("")
-    setResult(null)
 
     if (!selectedFile) {
       setFile(null)
@@ -32,14 +36,21 @@ export default function UploadForm() {
       return
     }
 
+    // Increased limit for better hosting
     const fileSizeMB = selectedFile.size / 1024 / 1024
-    if (fileSizeMB > 4.5) {
+    if (fileSizeMB > 50) {
       setFile(null)
-      setError(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum is 4.5MB.`)
+      setError(`File too large (${fileSizeMB.toFixed(2)} MB). Maximum size is 50MB.`)
       return
     }
 
     setFile(selectedFile)
+
+    console.log("File selected:", {
+      name: selectedFile.name,
+      size: selectedFile.size,
+      sizeMB: fileSizeMB.toFixed(2),
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,64 +59,68 @@ export default function UploadForm() {
 
     setIsUploading(true)
     setError("")
-    setResult(null)
-    setTimeElapsed(0)
-
-    const startTime = Date.now()
-    const timer = setInterval(() => {
-      setTimeElapsed(Math.floor((Date.now() - startTime) / 1000))
-    }, 1000)
+    setUploadProgress("Preparing upload...")
 
     try {
-      const fileSizeMB = file.size / 1024 / 1024
-
-      if (fileSizeMB > 3) {
-        setUploadProgress("Uploading file... This may take 1-2 minutes")
-      } else if (fileSizeMB > 2) {
-        setUploadProgress("Uploading file... This may take 30-60 seconds")
-      } else {
-        setUploadProgress("Uploading file...")
-      }
-
       const formData = new FormData()
       formData.append("file", file)
 
-      console.log(`🚀 Starting upload: ${file.name} (${fileSizeMB.toFixed(1)}MB)`)
+      const fileSizeMB = file.size / 1024 / 1024
+      if (fileSizeMB > 20) {
+        setUploadProgress("Large file detected. This may take several minutes...")
+      } else if (fileSizeMB > 10) {
+        setUploadProgress("Medium file detected. This may take up to a minute...")
+      } else {
+        setUploadProgress("Uploading to Google Drive...")
+      }
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
 
       const response = await fetch("/api/upload", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       })
 
-      clearInterval(timer)
+      clearTimeout(timeoutId)
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        if (response.status === 413) {
+          throw new Error("File too large for server processing.")
+        }
+        throw new Error("Server error. Please try again.")
+      }
 
       if (!response.ok) {
-        let errorMessage = "Upload failed"
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          if (response.status === 413) {
-            errorMessage = "File too large. Please try a smaller file (max 4.5MB)."
-          }
-        }
-        throw new Error(errorMessage)
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to upload file")
       }
 
       setUploadProgress("Generating QR code...")
       const data = await response.json()
-
-      console.log(`✅ Upload complete: ${data.fileName}`)
       setResult(data)
       setUploadProgress("")
     } catch (err: any) {
-      console.error("❌ Upload error:", err.message)
-      setError(err.message || "Upload failed. Please try again.")
+      console.error("Upload error:", err)
+      if (err.name === "AbortError") {
+        setError("Upload timeout. Please try again with a smaller file.")
+      } else {
+        setError(err.message || "Failed to upload file. Please try again.")
+      }
       setUploadProgress("")
-      clearInterval(timer)
     } finally {
       setIsUploading(false)
     }
+  }
+
+  const getFileSizeColor = (file: File) => {
+    const sizeMB = file.size / 1024 / 1024
+    if (sizeMB > 30) return "text-red-600"
+    if (sizeMB > 20) return "text-orange-600"
+    if (sizeMB > 10) return "text-yellow-600"
+    return "text-gray-500"
   }
 
   return (
@@ -123,68 +138,57 @@ export default function UploadForm() {
               />
               <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
                 <FileUp className="h-10 w-10 text-gray-400 mb-2" />
-                <span className="text-sm font-medium text-gray-700 text-center">
-                  {file ? file.name : "Click to upload PDF"}
-                </span>
-                <span className="text-xs mt-1 text-gray-500">
-                  {file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "PDF files only (Max: 4.5MB)"}
+                <span className="text-sm font-medium text-gray-700">{file ? file.name : "Click to upload PDF"}</span>
+                <span className={`text-xs mt-1 ${file ? getFileSizeColor(file) : "text-gray-500"}`}>
+                  {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "PDF files only (Max: 50MB)"}
                 </span>
               </label>
             </div>
 
-            {/* FREE Render Info */}
-            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Gift className="h-4 w-4 text-green-600" />
-                <div className="text-sm text-green-700">
-                  <p className="font-medium">100% FREE - Powered by Render</p>
-                  <p>Maximum file size: 4.5MB | No cost, no limits!</p>
-                  <p className="text-xs mt-1">⚠️ Files larger than 4.5MB will be rejected</p>
+            {file && file.size > 10 * 1024 * 1024 && (
+              <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-yellow-700">
+                  <p className="font-medium">Large file detected</p>
+                  <p>Files over 10MB may take longer to upload. Please be patient and don't close the browser.</p>
                 </div>
               </div>
-            </div>
+            )}
+
+            {file && file.size > 30 * 1024 * 1024 && (
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-red-700">
+                  <p className="font-medium">Very large file</p>
+                  <p>Consider compressing your PDF for faster upload, though this file should work.</p>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-red-700">
-                  <p className="font-medium">Upload Error</p>
-                  <p>{error}</p>
-                </div>
+                <p className="text-sm text-red-700">{error}</p>
               </div>
             )}
 
-            {isUploading && (
+            {uploadProgress && (
               <div className="text-center">
-                <p className="text-sm text-blue-600 mb-2 font-medium">{uploadProgress}</p>
-                <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-                  <div
-                    className="bg-gradient-to-r from-green-500 to-blue-600 h-3 rounded-full animate-pulse"
-                    style={{ width: "75%" }}
-                  ></div>
+                <p className="text-sm text-blue-600 mb-2">{uploadProgress}</p>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: "70%" }}></div>
                 </div>
-                <p className="text-xs text-gray-500">
-                  Time elapsed: {Math.floor(timeElapsed / 60)}:{(timeElapsed % 60).toString().padStart(2, "0")}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">FREE processing - please keep this page open</p>
               </div>
             )}
 
-            <Button
-              type="submit"
-              className="w-full bg-black hover:bg-gray-800 h-12 text-base font-medium"
-              disabled={!file || isUploading}
-            >
+            <Button type="submit" className="w-full bg-black hover:bg-gray-800" disabled={!file || isUploading}>
               {isUploading ? (
                 <div className="flex items-center">
-                  <Upload className="mr-2 h-5 w-5 animate-spin" />
-                  Uploading for FREE...
+                  <Upload className="mr-2 h-4 w-4 animate-spin" />
+                  {uploadProgress || "Uploading..."}
                 </div>
               ) : (
-                <>
-                  <FileUp className="mr-2 h-5 w-5" />
-                  Upload PDF & Generate QR Code (FREE)
-                </>
+                "Upload PDF & Generate QR"
               )}
             </Button>
           </form>
@@ -193,25 +197,16 @@ export default function UploadForm() {
 
       {result && (
         <div className="space-y-4">
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <p className="text-sm text-green-700 font-medium">
-                FREE upload successful! QR code generated with filename in bold center.
-              </p>
-            </div>
-          </div>
-
           <QRCodeDisplay url={result.url} fileName={result.fileName} />
-
           {result.fileSize && result.uploadTime && (
-            <div className="text-center text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-              🎉 Uploaded {result.fileSize} in {result.uploadTime} - 100% FREE via Render
+            <div className="text-center text-xs text-gray-500">
+              Uploaded {result.fileSize} in {result.uploadTime}
             </div>
           )}
         </div>
       )}
 
+      {/* Credits Section */}
       <div className="mt-8 text-center border-t border-gray-200 pt-6">
         <p className="text-sm text-gray-600 mb-3">Created by - Keshav Dadhich</p>
         <div className="flex justify-center items-center space-x-6 text-xs text-gray-500">

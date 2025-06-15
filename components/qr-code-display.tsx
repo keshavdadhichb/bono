@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, LinkIcon, ExternalLink } from "lucide-react"
+import { Download, LinkIcon } from "lucide-react"
 import QRCode from "qrcode"
 
 interface QRCodeDisplayProps {
@@ -16,107 +16,51 @@ export default function QRCodeDisplay({ url, fileName }: QRCodeDisplayProps) {
 
   useEffect(() => {
     if (canvasRef.current && url) {
-      generateQRWithText()
-    }
-  }, [url, fileName])
-
-  const generateQRWithText = async () => {
-    if (!canvasRef.current) return
-
-    try {
-      // Create QR code for the Google Drive URL
-      const tempCanvas = document.createElement("canvas")
-      await QRCode.toCanvas(tempCanvas, url, {
-        width: 400,
-        margin: 3,
-        color: { dark: "#000000", light: "#FFFFFF" },
-        errorCorrectionLevel: "M",
+      QRCode.toCanvas(canvasRef.current, url, {
+        width: 240,
+        margin: 1,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
       })
-
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext("2d")
-      if (!ctx) return
-
-      // Remove .pdf extension for display
-      const displayName = fileName.replace(/\.pdf$/i, "")
-      const qrSize = 400
-      const textHeight = 100
-      const padding = 20
-      const totalHeight = qrSize + textHeight + padding * 2
-
-      canvas.width = qrSize
-      canvas.height = totalHeight
-
-      // White background
-      ctx.fillStyle = "#FFFFFF"
-      ctx.fillRect(0, 0, qrSize, totalHeight)
-
-      // Draw QR code
-      ctx.drawImage(tempCanvas, 0, padding)
-
-      // Add filename in bold center
-      ctx.fillStyle = "#000000"
-      ctx.font = "bold 28px Arial, sans-serif"
-      ctx.textAlign = "center"
-      ctx.textBaseline = "middle"
-
-      const textY = qrSize + padding + textHeight / 2
-      ctx.fillText(displayName, qrSize / 2, textY)
-
-      // Add border
-      ctx.strokeStyle = "#CCCCCC"
-      ctx.lineWidth = 2
-      ctx.strokeRect(1, 1, qrSize - 2, totalHeight - 2)
-
-      console.log(`✅ QR Code generated for: ${url}`)
-    } catch (error) {
-      console.error("QR generation failed:", error)
-      // Fallback to simple QR code
-      if (canvasRef.current) {
-        QRCode.toCanvas(canvasRef.current, url, { width: 400, margin: 3 })
-      }
     }
-  }
+  }, [url])
 
   const downloadQRCode = () => {
     if (canvasRef.current) {
       const link = document.createElement("a")
-      const cleanFileName = fileName.replace(/\.pdf$/i, "")
-      link.download = `${cleanFileName}-QR.png`
-      link.href = canvasRef.current.toDataURL("image/png", 1.0)
-      document.body.appendChild(link)
+      link.download = `${fileName.replace(/\.[^/.]+$/, "")}-QR.png`
+      link.href = canvasRef.current.toDataURL("image/png")
       link.click()
-      document.body.removeChild(link)
     }
   }
 
   return (
     <Card className="w-full border border-gray-200">
       <CardContent className="flex flex-col items-center pt-6">
-        <canvas
-          ref={canvasRef}
-          className="mb-4 border border-gray-200 rounded-lg shadow-sm"
-          style={{ maxWidth: "100%", height: "auto" }}
-        />
+        <div className="flex flex-col items-center mb-4">
+          <canvas ref={canvasRef} className="mb-2" />
+          <p className="text-sm text-center font-medium text-gray-700 mt-2 max-w-[240px] break-words">{fileName}</p>
+        </div>
 
-        <div className="w-full p-3 bg-gray-50 rounded-md border text-sm">
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline flex items-center gap-2 break-all"
-          >
-            <LinkIcon className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate">Open PDF in Google Drive</span>
-            <ExternalLink className="h-4 w-4 flex-shrink-0" />
-          </a>
-          <p className="text-xs text-gray-500 mt-1">QR code links directly to your PDF in Google Drive</p>
+        <div className="flex items-center gap-2 mt-4 w-full">
+          <div className="flex-1 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm truncate">
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline flex items-center gap-1"
+            >
+              <LinkIcon className="h-3 w-3" />
+              <span className="truncate">{url}</span>
+            </a>
+          </div>
         </div>
       </CardContent>
-
-      <CardFooter>
-        <Button onClick={downloadQRCode} className="w-full bg-black hover:bg-gray-800">
-          <Download className="mr-2 h-4 w-4" />
+      <CardFooter className="flex justify-between">
+        <Button variant="outline" onClick={downloadQRCode} className="w-full flex items-center gap-2">
+          <Download className="h-4 w-4" />
           Download QR Code
         </Button>
       </CardFooter>
