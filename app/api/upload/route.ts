@@ -1,12 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { uploadToGoogleDrive } from "@/lib/google-drive"
 
+// Render.com free tier configuration
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+// Global file storage
+declare global {
+  var __fileStore: Map<string, { name: string; data: Buffer; type: string; uploadTime: number }> | undefined
+}
+
+function getFileStore() {
+  if (!global.__fileStore) {
+    global.__fileStore = new Map()
+  }
+  return global.__fileStore
+}
+
 export async function POST(request: NextRequest) {
   try {
-    console.log("=== GOOGLE DRIVE UPLOAD STARTED ===")
+    console.log("=== RENDER FREE TIER UPLOAD ===")
 
     const formData = await request.formData()
     const file = formData.get("file") as File
@@ -21,10 +33,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Only PDF files allowed" }, { status: 400 })
     }
 
-    if (file.size > 100 * 1024 * 1024) {
+    // Render free tier - 4.5MB limit
+    if (file.size > 4.5 * 1024 * 1024) {
       return NextResponse.json(
         {
-          error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 100MB.`,
+          error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 4.5MB.`,
         },
         { status: 413 },
       )
@@ -34,26 +47,45 @@ export async function POST(request: NextRequest) {
 
     // Convert to Buffer
     const arrayBuffer = await file.arrayBuffer()
-    const fileBuffer = Buffer.from(arrayBuffer)
+    const fileData = Buffer.from(arrayBuffer)
 
-    console.log("Uploading to Google Drive...")
+    console.log("File processed successfully on Render")
 
-    // Upload to Google Drive
-    const driveUrl = await uploadToGoogleDrive(fileBuffer, file.name, file.type)
+    // Generate unique ID
+    const fileId = Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
+
+    // Store in memory
+    const fileStore = getFileStore()
+    fileStore.set(fileId, {
+      name: file.name,
+      data: fileData,
+      type: file.type,
+      uploadTime: Date.now(),
+    })
+
+    // Clean up (keep last 20 files on free tier)
+    if (fileStore.size > 20) {
+      const entries = Array.from(fileStore.entries())
+      entries.sort((a, b) => a[1].uploadTime - b[1].uploadTime)
+      const toRemove = entries.slice(0, entries.length - 20)
+      toRemove.forEach(([key]) => fileStore.delete(key))
+      console.log(`Cleaned up ${toRemove.length} old files`)
+    }
 
     const uploadTime = Date.now() - startTime
+    const viewUrl = `${request.nextUrl.origin}/api/view/${fileId}`
 
-    console.log(`✅ Google Drive upload successful: ${driveUrl} (${uploadTime}ms)`)
+    console.log(`✅ Render upload successful: ${fileId} (${uploadTime}ms)`)
 
     return NextResponse.json({
-      url: driveUrl,
+      url: viewUrl,
       fileName: file.name,
       fileSize: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
       uploadTime: `${(uploadTime / 1000).toFixed(1)}s`,
-      driveUrl: driveUrl,
+      fileId: fileId,
     })
   } catch (error: any) {
-    console.error("❌ Google Drive upload failed:", error)
+    console.error("❌ Render upload failed:", error)
     return NextResponse.json({ error: `Upload failed: ${error.message}` }, { status: 500 })
   }
 }

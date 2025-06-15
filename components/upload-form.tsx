@@ -5,7 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileUp, Github, Mail, AlertCircle, CheckCircle, Cloud } from "lucide-react"
+import { Upload, FileUp, Github, Mail, AlertCircle, CheckCircle, Gift } from "lucide-react"
 import QRCodeDisplay from "./qr-code-display"
 
 export default function UploadForm() {
@@ -33,9 +33,9 @@ export default function UploadForm() {
     }
 
     const fileSizeMB = selectedFile.size / 1024 / 1024
-    if (fileSizeMB > 100) {
+    if (fileSizeMB > 4.5) {
       setFile(null)
-      setError(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum is 100MB.`)
+      setError(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum is 4.5MB.`)
       return
     }
 
@@ -59,20 +59,18 @@ export default function UploadForm() {
     try {
       const fileSizeMB = file.size / 1024 / 1024
 
-      if (fileSizeMB > 50) {
-        setUploadProgress("Uploading to Google Drive... This may take 3-4 minutes")
-      } else if (fileSizeMB > 25) {
-        setUploadProgress("Uploading to Google Drive... This may take 2-3 minutes")
-      } else if (fileSizeMB > 10) {
-        setUploadProgress("Uploading to Google Drive... This may take 1-2 minutes")
+      if (fileSizeMB > 3) {
+        setUploadProgress("Uploading file... This may take 1-2 minutes")
+      } else if (fileSizeMB > 2) {
+        setUploadProgress("Uploading file... This may take 30-60 seconds")
       } else {
-        setUploadProgress("Uploading to Google Drive...")
+        setUploadProgress("Uploading file...")
       }
 
       const formData = new FormData()
       formData.append("file", file)
 
-      console.log(`🚀 Starting Google Drive upload: ${file.name} (${fileSizeMB.toFixed(1)}MB)`)
+      console.log(`🚀 Starting upload: ${file.name} (${fileSizeMB.toFixed(1)}MB)`)
 
       const response = await fetch("/api/upload", {
         method: "POST",
@@ -88,7 +86,7 @@ export default function UploadForm() {
           errorMessage = errorData.error || errorMessage
         } catch {
           if (response.status === 413) {
-            errorMessage = "File too large. Please try a smaller file (max 100MB)."
+            errorMessage = "File too large. Please try a smaller file (max 4.5MB)."
           }
         }
         throw new Error(errorMessage)
@@ -97,7 +95,7 @@ export default function UploadForm() {
       setUploadProgress("Generating QR code...")
       const data = await response.json()
 
-      console.log(`✅ Google Drive upload complete: ${data.fileName}`)
+      console.log(`✅ Upload complete: ${data.fileName}`)
       setResult(data)
       setUploadProgress("")
     } catch (err: any) {
@@ -129,19 +127,19 @@ export default function UploadForm() {
                   {file ? file.name : "Click to upload PDF"}
                 </span>
                 <span className="text-xs mt-1 text-gray-500">
-                  {file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "PDF files only (Max: 100MB)"}
+                  {file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "PDF files only (Max: 4.5MB)"}
                 </span>
               </label>
             </div>
 
-            {/* Google Drive Integration Info */}
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            {/* FREE Render Info */}
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
               <div className="flex items-center gap-2">
-                <Cloud className="h-4 w-4 text-blue-600" />
-                <div className="text-sm text-blue-700">
-                  <p className="font-medium">Google Drive Integration</p>
-                  <p>Files uploaded directly to Google Drive | QR codes link to Drive URLs</p>
-                  <p className="text-xs mt-1">🔗 Your 15.8MB file will be accessible via Google Drive link!</p>
+                <Gift className="h-4 w-4 text-green-600" />
+                <div className="text-sm text-green-700">
+                  <p className="font-medium">100% FREE - Powered by Render</p>
+                  <p>Maximum file size: 4.5MB | No cost, no limits!</p>
+                  <p className="text-xs mt-1">⚠️ Files larger than 4.5MB will be rejected</p>
                 </div>
               </div>
             </div>
@@ -161,14 +159,14 @@ export default function UploadForm() {
                 <p className="text-sm text-blue-600 mb-2 font-medium">{uploadProgress}</p>
                 <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
                   <div
-                    className="bg-gradient-to-r from-blue-500 to-green-600 h-3 rounded-full animate-pulse"
+                    className="bg-gradient-to-r from-green-500 to-blue-600 h-3 rounded-full animate-pulse"
                     style={{ width: "75%" }}
                   ></div>
                 </div>
                 <p className="text-xs text-gray-500">
                   Time elapsed: {Math.floor(timeElapsed / 60)}:{(timeElapsed % 60).toString().padStart(2, "0")}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Uploading to Google Drive - please keep this page open</p>
+                <p className="text-xs text-gray-500 mt-1">FREE processing - please keep this page open</p>
               </div>
             )}
 
@@ -180,12 +178,12 @@ export default function UploadForm() {
               {isUploading ? (
                 <div className="flex items-center">
                   <Upload className="mr-2 h-5 w-5 animate-spin" />
-                  Uploading to Google Drive...
+                  Uploading for FREE...
                 </div>
               ) : (
                 <>
                   <FileUp className="mr-2 h-5 w-5" />
-                  Upload PDF to Google Drive & Generate QR
+                  Upload PDF & Generate QR Code (FREE)
                 </>
               )}
             </Button>
@@ -199,7 +197,7 @@ export default function UploadForm() {
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-600" />
               <p className="text-sm text-green-700 font-medium">
-                Google Drive upload successful! QR code links directly to your PDF.
+                FREE upload successful! QR code generated with filename in bold center.
               </p>
             </div>
           </div>
@@ -208,7 +206,7 @@ export default function UploadForm() {
 
           {result.fileSize && result.uploadTime && (
             <div className="text-center text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-              ☁️ Uploaded {result.fileSize} to Google Drive in {result.uploadTime}
+              🎉 Uploaded {result.fileSize} in {result.uploadTime} - 100% FREE via Render
             </div>
           )}
         </div>
