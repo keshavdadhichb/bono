@@ -5,21 +5,24 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileUp, Github, Mail, AlertCircle, CheckCircle, Cloud } from "lucide-react"
+import { Upload, FileUp, Github, Mail, AlertCircle, CheckCircle } from "lucide-react"
 import QRCodeDisplay from "./qr-code-display"
 
-export default function UploadForm() {
+const CHUNK_SIZE = 1024 * 1024 // 1MB chunks
+
+export default function ChunkedUploadForm() {
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState("")
-  const [uploadProgress, setUploadProgress] = useState("")
-  const [timeElapsed, setTimeElapsed] = useState(0)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadStatus, setUploadStatus] = useState("")
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     setError("")
     setResult(null)
+    setUploadProgress(0)
 
     if (!selectedFile) {
       setFile(null)
@@ -42,6 +45,48 @@ export default function UploadForm() {
     setFile(selectedFile)
   }
 
+  const uploadFileInChunks = async (file: File) => {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+    const uploadId = Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
+
+    setUploadStatus(`Uploading in ${totalChunks} chunks...`)
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * CHUNK_SIZE
+      const end = Math.min(start + CHUNK_SIZE, file.size)
+      const chunk = file.slice(start, end)
+
+      const formData = new FormData()
+      formData.append("chunk", chunk)
+      formData.append("chunkIndex", chunkIndex.toString())
+      formData.append("totalChunks", totalChunks.toString())
+      formData.append("fileName", file.name)
+      formData.append("fileType", file.type)
+      formData.append("uploadId", uploadId)
+
+      const response = await fetch("/api/upload-chunk", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Chunk ${chunkIndex + 1} upload failed`)
+      }
+
+      const data = await response.json()
+      const progress = ((chunkIndex + 1) / totalChunks) * 100
+      setUploadProgress(progress)
+      setUploadStatus(`Uploading chunk ${chunkIndex + 1}/${totalChunks}...`)
+
+      if (data.complete) {
+        return data
+      }
+    }
+
+    throw new Error("Upload completed but no final response received")
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!file) return
@@ -49,62 +94,25 @@ export default function UploadForm() {
     setIsUploading(true)
     setError("")
     setResult(null)
-    setTimeElapsed(0)
-
-    const startTime = Date.now()
-    const timer = setInterval(() => {
-      setTimeElapsed(Math.floor((Date.now() - startTime) / 1000))
-    }, 1000)
+    setUploadProgress(0)
 
     try {
       const fileSizeMB = file.size / 1024 / 1024
+      console.log(`🚀 Starting chunked upload: ${file.name} (${fileSizeMB.toFixed(1)}MB)`)
 
-      if (fileSizeMB > 50) {
-        setUploadProgress("Uploading to Google Drive... This may take 3-4 minutes")
-      } else if (fileSizeMB > 25) {
-        setUploadProgress("Uploading to Google Drive... This may take 2-3 minutes")
-      } else if (fileSizeMB > 10) {
-        setUploadProgress("Uploading to Google Drive... This may take 1-2 minutes")
-      } else {
-        setUploadProgress("Uploading to Google Drive...")
-      }
+      const data = await uploadFileInChunks(file)
 
-      const formData = new FormData()
-      formData.append("file", file)
+      setUploadStatus("Generating QR code...")
+      setUploadProgress(100)
 
-      console.log(`🚀 Starting Google Drive upload: ${file.name} (${fileSizeMB.toFixed(1)}MB)`)
-
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      })
-
-      clearInterval(timer)
-
-      if (!response.ok) {
-        let errorMessage = "Upload failed"
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          if (response.status === 413) {
-            errorMessage = "File too large. Please try a smaller file (max 100MB)."
-          }
-        }
-        throw new Error(errorMessage)
-      }
-
-      setUploadProgress("Generating QR code...")
-      const data = await response.json()
-
-      console.log(`✅ Google Drive upload complete: ${data.fileName}`)
+      console.log(`✅ Upload complete: ${data.fileName}`)
       setResult(data)
-      setUploadProgress("")
+      setUploadStatus("")
     } catch (err: any) {
       console.error("❌ Upload error:", err.message)
       setError(err.message || "Upload failed. Please try again.")
-      setUploadProgress("")
-      clearInterval(timer)
+      setUploadStatus("")
+      setUploadProgress(0)
     } finally {
       setIsUploading(false)
     }
@@ -134,17 +142,20 @@ export default function UploadForm() {
               </label>
             </div>
 
-            {/* Google Drive Integration Info */}
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Cloud className="h-4 w-4 text-blue-600" />
-                <div className="text-sm text-blue-700">
-                  <p className="font-medium">Google Drive Integration</p>
-                  <p>Files uploaded directly to Google Drive | QR codes link to Drive URLs</p>
-                  <p className="text-xs mt-1">🔗 Your 15.8MB file will be accessible via Google Drive link!</p>
+            {/* Chunked Upload Info */}
+            {file && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-blue-600" />
+                  <div className="text-sm text-blue-700">
+                    <p className="font-medium">Chunked Upload Ready</p>
+                    <p>
+                      File will be uploaded in {Math.ceil(file.size / CHUNK_SIZE)} small chunks to bypass size limits
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {error && (
               <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -156,19 +167,17 @@ export default function UploadForm() {
               </div>
             )}
 
+            {/* Progress Display */}
             {isUploading && (
               <div className="text-center">
-                <p className="text-sm text-blue-600 mb-2 font-medium">{uploadProgress}</p>
-                <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+                <p className="text-sm text-blue-600 mb-2 font-medium">{uploadStatus}</p>
+                <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
-                    className="bg-gradient-to-r from-blue-500 to-green-600 h-3 rounded-full animate-pulse"
-                    style={{ width: "75%" }}
+                    className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
                   ></div>
                 </div>
-                <p className="text-xs text-gray-500">
-                  Time elapsed: {Math.floor(timeElapsed / 60)}:{(timeElapsed % 60).toString().padStart(2, "0")}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Uploading to Google Drive - please keep this page open</p>
+                <p className="text-xs text-gray-500 mt-1">{uploadProgress.toFixed(0)}% complete</p>
               </div>
             )}
 
@@ -180,12 +189,12 @@ export default function UploadForm() {
               {isUploading ? (
                 <div className="flex items-center">
                   <Upload className="mr-2 h-5 w-5 animate-spin" />
-                  Uploading to Google Drive...
+                  Uploading...
                 </div>
               ) : (
                 <>
                   <FileUp className="mr-2 h-5 w-5" />
-                  Upload PDF to Google Drive & Generate QR
+                  Upload PDF & Generate QR Code
                 </>
               )}
             </Button>
@@ -199,16 +208,16 @@ export default function UploadForm() {
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-600" />
               <p className="text-sm text-green-700 font-medium">
-                Google Drive upload successful! QR code links directly to your PDF.
+                Chunked upload successful! QR code generated with filename in bold center.
               </p>
             </div>
           </div>
 
           <QRCodeDisplay url={result.url} fileName={result.fileName} />
 
-          {result.fileSize && result.uploadTime && (
+          {result.fileSize && (
             <div className="text-center text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-              ☁️ Uploaded {result.fileSize} to Google Drive in {result.uploadTime}
+              📊 Uploaded {result.fileSize} using chunked upload
             </div>
           )}
         </div>

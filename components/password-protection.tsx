@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -18,8 +17,7 @@ export default function PasswordProtection() {
     e.preventDefault()
 
     if (password === "Bonostyle@1234") {
-      // Set a cookie to maintain authentication
-      document.cookie = `auth-token=${password}; path=/; max-age=${60 * 60 * 24}` // 24 hours
+      document.cookie = `auth-token=${password}; path=/; max-age=${60 * 60 * 24}`
       router.push("/dashboard")
       router.refresh()
     } else {
